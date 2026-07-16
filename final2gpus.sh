@@ -1,7 +1,5 @@
 #!/bin/bash
-
-# Stop immediately if any individual step fails
-set -e
+set -eou pipefail
 
 # Define your verified local GROMACS 2025.2 absolute binary path
 GMX_BIN="/home/admin/Documents/gromacs-2025.2/build/bin/gmx"
