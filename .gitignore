@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# My Custom Simulation Ignores
+charmm36.ff/
+mdout.mdp
+residuetypes.dat
