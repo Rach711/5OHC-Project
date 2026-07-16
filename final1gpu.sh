@@ -68,25 +68,25 @@ for seq in "${sequences[@]}"; do
 
       # --- STEP 4: ENERGY MINIMIZATION ---
       cd "$EM"
-      rm -rf ./charmm36.ff; ln -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
       $GMX_BIN grompp -f "$RESOURCES/em.mdp" -c "$TOPOL/solv_ions.gro" -p "$TOPOL/topol.top" -o em.tpr
       $GMX_BIN mdrun -v -deffnm em -ntmpi 1
 
       # --- STEP 5: NVT ---
       cd "$NVT"
-      rm -rf ./charmm36.ff; ln -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
       $GMX_BIN grompp -f "$RESOURCES/nvt.mdp" -c "$EM/em.gro" -r "$EM/em.gro" -p "$TOPOL/topol.top" -o nvt.tpr
       $GMX_BIN mdrun -ntomp 12 -v -deffnm nvt -ntmpi 1
 
       # --- STEP 6: NPT ---
       cd "$NPT"
-      rm -rf ./charmm36.ff; ln -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
       $GMX_BIN grompp -f "$RESOURCES/npt.mdp" -c "$NVT/nvt.gro" -r "$NVT/nvt.gro" -t "$NVT/nvt.cpt" -p "$TOPOL/topol.top" -o npt.tpr
       $GMX_BIN mdrun -ntomp 12 -v -deffnm npt -ntmpi 1
 
       # --- STEP 7: PRODUCTION MD (WITH CHECKPOINT RESUME) ---
       cd "$MD"
-      rm -rf ./charmm36.ff; ln -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
       
       if [ -f "md.cpt" ]; then
         echo ">>> [RESUME] Found checkpoint. Appending to trajectory... <<<"
