@@ -1,15 +1,11 @@
 #!/bin/bash
-
-# Stop immediately if any individual step fails
-set -e
+set -eou pipefail
 
 # Define your verified local GROMACS 2025.2 absolute binary path
 GMX_BIN="/home/admin/Documents/gromacs-2025.2/build/bin/gmx"
 
 # --- CONFIGURATION: LIST YOUR 12 SEQUENCES HERE ---
-# Add all 12 of your exact sequence names to this array
 sequences=(
-  "APC_4348_hot"
   "TP53_632_non"
   "TP53_637_hot"
   "TP53_844_hot"
@@ -88,20 +84,25 @@ run_on_gpu() {
   $GMX_BIN grompp -f $RESOURCES/npt.mdp -c $NVT/nvt.gro -r $NVT/nvt.gro -t $NVT/nvt.cpt -p $TOPOL/topol.top -o npt.tpr
   $GMX_BIN mdrun -ntomp 12 -v -deffnm npt -ntmpi 1
 
-  # --- STEP 7: PRODUCTION MD FULL RUN ---
+  # --- STEP 7: PRODUCTION MD (WITH CHECKPOINT RESUME) ---
   cd $MD
   rm -rf ./charmm36.ff
   ln -sf $BASE_DIR/scripts/charmm36.ff ./charmm36.ff
-  $GMX_BIN grompp -f $RESOURCES/md.mdp -c $NPT/npt.gro -t $NPT/npt.cpt -p $TOPOL/topol.top -o md.tpr
 
-  # Full GPU offloading execution (Notice: No artificial -nsteps limit here)
-  $GMX_BIN mdrun -v -deffnm md -nb gpu -pme gpu -bonded gpu -update gpu -dlb yes -ntmpi 1
+  # Check if checkpoint exists to append, otherwise build the TPR fresh and run
+  if [ -f "md.cpt" ]; then
+    echo ">>> [GPU $gpu_id - RESUME] Found checkpoint for $seq R$rep. Appending to trajectory... <<<"
+    $GMX_BIN mdrun -v -deffnm md -nb gpu -pme gpu -bonded gpu -update gpu -dlb yes -ntmpi 1 -cpi md.cpt -append
+  else
+    echo ">>> [GPU $gpu_id - FRESH] No checkpoint found. Starting new MD run... <<<"
+    $GMX_BIN grompp -f $RESOURCES/md.mdp -c $NPT/npt.gro -t $NPT/npt.cpt -p $TOPOL/topol.top -o md.tpr
+    $GMX_BIN mdrun -v -deffnm md -nb gpu -pme gpu -bonded gpu -update gpu -dlb yes -ntmpi 1
+  fi
 
   echo ">>> [GPU $gpu_id] Finished Simulation: $seq | Replicate: $rep <<<"
 }
 
 # --- MAIN ORCHESTRATION LOOP ---
-# Sweeps sequentially through your array lists and manages your dual 5090 cards
 gpu=0
 for seq in "${sequences[@]}"; do
   for rep in 1 2 3; do
@@ -114,7 +115,7 @@ for seq in "${sequences[@]}"; do
       gpu=1
     else
       gpu=0
-      # Wait right here until BOTH card processes finish their ~14-hour wave
+      # Wait right here until BOTH card processes finish their wave
       wait 
     fi
 
@@ -123,4 +124,4 @@ done
 
 # Catch any remaining trailing single job if applicable
 wait
-echo ">>> ALL 36 SIMULATIONS COMPLETED SUCCESSFULLY OUT ACROSS BOTH RTX 5090s <<<"
+echo ">>> ALL 36 SIMULATIONS COMPLETED OUT ACROSS BOTH RTX 5090s <<<"
