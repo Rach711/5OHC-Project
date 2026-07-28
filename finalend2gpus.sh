@@ -116,7 +116,7 @@ for seq in "${sequences[@]}"; do
       gpu=1
     else
       gpu=0
-      # Wait right here until BOTH card processes finish their ~14-hour wave
+      # Wait right here until BOTH card processes finish their ~8-hour wave
       wait 
     fi
 

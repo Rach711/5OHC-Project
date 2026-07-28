@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+# --- LOGGING SETUP ---
+LOG_FILE="simulation_run_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee -i -a "$LOG_FILE") 2>&1
+echo "Logging initialized -> $LOG_FILE"
+# ---------------------
+
 # Global Paths & Configurations
 GMX_BIN="/home/admin/Documents/gromacs-2025.2/build/bin/gmx"
 SCRIPT_DIR=$(pwd)
@@ -50,10 +56,10 @@ for seq in "${sequences[@]}"; do
     {
       # --- STEP 1: TOPOLOGY ---
       cd "$TOPOL"
-      rm -rf ./charmm36.ff ./residuetypes.dat
-      ln -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./amber99bsc1.ff ./residuetypes.dat
+      ln -sf "$SCRIPT_DIR/amber99bsc1.ff" ./amber99bsc1.ff
       ln -sf "$SCRIPT_DIR/residuetypes.dat" ./residuetypes.dat
-      printf "1\n1\n0\n0\n4\n6\n4\n6\n" | $GMX_BIN pdb2gmx -f "$INPUT_PDB" -o processed.gro -p topol.top -i posre.itp -ter
+      printf "1\n1\n" | $GMX_BIN pdb2gmx -f "$INPUT_PDB" -o processed.gro -p topol.top -i posre.itp -ter
       
       # Clean up relative path formatting anomalies safely if the files exist
       if ls *.itp 1>/dev/null 2>&1; then
@@ -74,25 +80,25 @@ for seq in "${sequences[@]}"; do
 
       # --- STEP 4: ENERGY MINIMIZATION ---
       cd "$EM"
-      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./amber99bsc1.ff; ln -sf "$SCRIPT_DIR/amber99bsc1.ff" ./amber99bsc1.ff
       $GMX_BIN grompp -f "$RESOURCES/em.mdp" -c "$TOPOL/solv_ions.gro" -p "$TOPOL/topol.top" -o em.tpr
       $GMX_BIN mdrun -v -deffnm em -ntmpi 1
 
       # --- STEP 5: NVT ---
       cd "$NVT"
-      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./amber99bsc1.ff; ln -sf "$SCRIPT_DIR/amber99bsc1.ff" ./amber99bsc1.ff
       $GMX_BIN grompp -f "$RESOURCES/nvt.mdp" -c "$EM/em.gro" -r "$EM/em.gro" -p "$TOPOL/topol.top" -o nvt.tpr
       $GMX_BIN mdrun -ntomp 12 -v -deffnm nvt -ntmpi 1
 
       # --- STEP 6: NPT ---
       cd "$NPT"
-      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./amber99bsc1.ff; ln -sf "$SCRIPT_DIR/amber99bsc1.ff" ./amber99bsc1.ff
       $GMX_BIN grompp -f "$RESOURCES/npt.mdp" -c "$NVT/nvt.gro" -r "$NVT/nvt.gro" -t "$NVT/nvt.cpt" -p "$TOPOL/topol.top" -o npt.tpr
       $GMX_BIN mdrun -ntomp 12 -v -deffnm npt -ntmpi 1
 
       # --- STEP 7: PRODUCTION MD (WITH CHECKPOINT RESUME) ---
       cd "$MD"
-      rm -rf ./charmm36.ff; lnf -sf "$SCRIPT_DIR/charmm36.ff" ./charmm36.ff
+      rm -rf ./amber99bsc1.ff; ln -sf "$SCRIPT_DIR/amber99bsc1.ff" ./amber99bsc1.ff
       
       if [ -f "md.cpt" ]; then
         echo ">>> [RESUME] Found checkpoint. Appending to trajectory... <<<"

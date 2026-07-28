@@ -10,3 +10,6 @@ export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=12
 
 /home/admin/Documents/gromacs-2025.2/build/bin/gmx mdrun -v -deffnm md -nb gpu -pme gpu -bonded gpu -update gpu -dlb yes -ntmpi 1 -cpi md.cpt -append
+
+
+/home/admin/Documents/gromacs-2025.2/build/bin/gmx editconf -f no-water.gro -o APC_637_hyd1.pdb
