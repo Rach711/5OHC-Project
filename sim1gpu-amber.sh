@@ -1,12 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- LOGGING SETUP ---
-LOG_FILE="simulation_run_$(date +%Y%m%d_%H%M%S).log"
-exec > >(tee -i -a "$LOG_FILE") 2>&1
-echo "Logging initialized -> $LOG_FILE"
-# ---------------------
-
 # Global Paths & Configurations
 GMX_BIN="/home/admin/Documents/gromacs-2025.2/build/bin/gmx"
 SCRIPT_DIR=$(pwd)
