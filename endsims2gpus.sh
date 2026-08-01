@@ -1,7 +1,5 @@
 #!/bin/bash
-
-# Stop immediately if any individual step fails
-set -e
+set -eou pipefail
 
 # Define your verified local GROMACS 2025.2 absolute binary path
 GMX_BIN="/home/admin/Documents/gromacs-2025.2/build/bin/gmx"
@@ -9,8 +7,6 @@ GMX_BIN="/home/admin/Documents/gromacs-2025.2/build/bin/gmx"
 # --- CONFIGURATION: LIST YOUR 12 SEQUENCES HERE ---
 # Add all 12 of your exact sequence names to this array
 sequences=(
-  "APC_3335_non"
-  "APC_4099_hot"
   "APC_4103_non"
   "APC_4343_non"
   "APC_4348_hot"
@@ -52,16 +48,21 @@ run_on_gpu() {
 
   # --- STEP 1: TOPOLOGY GENERATION ---
   cd $TOPOL
-  rm -rf ./charmm36.ff ./residuetypes.dat
-  ln -sf $BASE_DIR/scripts/charmm36.ff ./charmm36.ff
+  rm -rf ./amber99bsc1.ff ./residuetypes.dat
+  ln -sf $BASE_DIR/scripts/amber99bsc1.ff ./amber99bsc1.ff
   ln -sf $BASE_DIR/scripts/residuetypes.dat ./residuetypes.dat
 
   # Uses your exact working interactive menu choices and the -ter flag
-  printf "1\n1\n0\n0\n4\n6\n4\n6\n" | $GMX_BIN pdb2gmx -f $INPUT_PDB -o processed.gro -p topol.top -i posre.itp -ter
+  printf "1\n1\n" | $GMX_BIN pdb2gmx -f $INPUT_PDB -o processed.gro -p topol.top -i posre.itp -ter
   
   # Clean up relative path formatting anomalies inside the topology output
-  sed -i 's|../output/topologies/||g' *.itp 2>/dev/null || true
-  sed -i 's|../output/topologies/||g' *.top 2>/dev/null || true
+  if ls *.itp 1>/dev/null 2>&1; then
+    sed -i 's|../output/topologies/||g' *.itp
+  fi
+
+  if ls *.top 1>/dev/null 2>&1; then
+    sed -i 's|../output/topologies/||g' *.top
+  fi
 
   # --- STEP 2: SOLVATION & BOX GENERATION ---
   $GMX_BIN editconf -f processed.gro -o box.gro -c -d 1.0 -bt cubic
@@ -73,29 +74,29 @@ run_on_gpu() {
 
   # --- STEP 4: ENERGY MINIMIZATION ---
   cd $EM
-  rm -rf ./charmm36.ff
-  ln -sf $BASE_DIR/scripts/charmm36.ff ./charmm36.ff
+  rm -rf ./amber99bsc1.ff
+  ln -sf $BASE_DIR/scripts/amber99bsc1.ff ./amber99bsc1.ff
   $GMX_BIN grompp -f $RESOURCES/em.mdp -c $TOPOL/solv_ions.gro -p $TOPOL/topol.top -o em.tpr
   $GMX_BIN mdrun -v -deffnm em -ntmpi 1
 
   # --- STEP 5: NVT EQUILIBRATION ---
   cd $NVT
-  rm -rf ./charmm36.ff
-  ln -sf $BASE_DIR/scripts/charmm36.ff ./charmm36.ff
+  rm -rf ./amber99bsc1.ff
+  ln -sf $BASE_DIR/scripts/amber99bsc1.ff ./amber99bsc1.ff
   $GMX_BIN grompp -f $RESOURCES/nvt.mdp -c $EM/em.gro -r $EM/em.gro -p $TOPOL/topol.top -o nvt.tpr
   $GMX_BIN mdrun -ntomp 12 -v -deffnm nvt -ntmpi 1
 
   # --- STEP 6: NPT EQUILIBRATION ---
   cd $NPT
-  rm -rf ./charmm36.ff
-  ln -sf $BASE_DIR/scripts/charmm36.ff ./charmm36.ff
+  rm -rf ./amber99bsc1.ff
+  ln -sf $BASE_DIR/scripts/amber99bsc1.ff ./amber99bsc1.ff
   $GMX_BIN grompp -f $RESOURCES/npt.mdp -c $NVT/nvt.gro -r $NVT/nvt.gro -t $NVT/nvt.cpt -p $TOPOL/topol.top -o npt.tpr
   $GMX_BIN mdrun -ntomp 12 -v -deffnm npt -ntmpi 1
 
   # --- STEP 7: PRODUCTION MD FULL RUN ---
   cd $MD
-  rm -rf ./charmm36.ff
-  ln -sf $BASE_DIR/scripts/charmm36.ff ./charmm36.ff
+  rm -rf ./amber99bsc1.ff
+  ln -sf $BASE_DIR/scripts/amber99bsc1.ff ./amber99bsc1.ff
   $GMX_BIN grompp -f $RESOURCES/md.mdp -c $NPT/npt.gro -t $NPT/npt.cpt -p $TOPOL/topol.top -o md.tpr
 
   # Full GPU offloading execution (Notice: No artificial -nsteps limit here)
@@ -127,4 +128,4 @@ done
 
 # Catch any remaining trailing single job if applicable
 wait
-echo ">>> ALL 36 SIMULATIONS COMPLETED SUCCESSFULLY OUT ACROSS BOTH RTX 5090s <<<"
+echo ">>> SIMULATIONS COMPLETED SUCCESSFULLY OUT ACROSS BOTH RTX 5090s <<<"
