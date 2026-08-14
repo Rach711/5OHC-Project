@@ -27,7 +27,7 @@ summary = summary.reindex(
     summary['mean_coefficient'].abs().sort_values(ascending=False).index
 ).sort_values('times_selected', ascending=False, kind='stable').reset_index(drop=True)
  
-summary.to_csv(os.path.join(feature_selection_dir, "Lasso_summary.csv"), index=False)
+summary.to_csv(os.path.join(feature_selection_dir, "Lasso", "Lasso_summary.csv"), index=False)
  
 print(f"Lasso: {len(summary)} distinct features selected at least once across {n_seeds} runs")
 print("Top 15 by how often they were selected:")

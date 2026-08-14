@@ -22,7 +22,7 @@ summary = combined.groupby('Feature').agg(
 summary['pct_of_runs'] = summary['times_selected'] / n_seeds * 100
 summary = summary.sort_values(['times_selected', 'mean_importance'], ascending=[False, False]).reset_index(drop=True)
 
-summary.to_csv(os.path.join(feature_selection_dir, "PermImportance_summary.csv"), index=False)
+summary.to_csv(os.path.join(feature_selection_dir, "PermImportance", "PermImportance_summary.csv"), index=False)
 
 print(f"Permutation Importance: {len(summary)} distinct features in the top 40 at least once across {n_seeds} runs")
 print("Top 15 by how often they were selected:")
