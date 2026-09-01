@@ -1,210 +1,146 @@
 import sklearn
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import os
+import subprocess
+import sys
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import recall_score, f1_score, precision_score
-from sklearn.linear_model import Lasso
 from sklearn.feature_selection import RFECV
+from sklearn.inspection import permutation_importance
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import GridSearchCV
 
 
 # Importing the datasets
-axbend = pd.read_csv('axbend.csv', delimiter=" ")
-axbend = axbend.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-axbend = axbend.add_suffix('ad')
-axbend = axbend.rename(columns={'V1ad':'ID'})
-axbend
+csv_dir = "../parameters_csv"
 
-buckle = pd.read_csv('buckle.csv', delimiter=" ")
-buckle = buckle.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-buckle = buckle.add_suffix('be')
+# Output folder for RF-specific feature-selection outputs. Lasso and
+# Dispersion Ratio don't depend on the model, so they're no longer generated
+# here - they're each generated once, standalone, by lasso_aggregate.py and
+# dispratio_aggregate.py respectively (which also aggregate their own output,
+# so nothing downstream needs to call them from this script anymore).
+feature_selection_dir = "../feature_selection/rf"
+for subfolder in ["RFCI", "RFECV", "PermImportance"]:
+    os.makedirs(os.path.join(feature_selection_dir, subfolder), exist_ok=True)
 
+params = ["tbend", "shear", "stretch", "stagger", "buckle", "propel", "opening",
+          "xdisp", "ydisp", "inclin", "tip", "axbend", "shift", "slide", "rise",
+          "tilt", "roll", "twist", "hris", "htwi", "phaseW", "ampW", "gammaW",
+          "gammaC", "phaseC", "ampC", "minw", "mind", "majw", "majd"]
 
-inclin = pd.read_csv('inclin.csv', delimiter=" ")
-inclin = inclin.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-inclin = inclin.add_suffix('in')
- 
+dfs = []
+for p in params:
+    df = pd.read_csv(f"{csv_dir}/{p}.csv")
+    data_cols = df.columns.drop("sequence")
+    df = df.rename(columns={c: f"{c}_{p}" for c in data_cols})
+    dfs.append(df.set_index("sequence"))
 
-opening = pd.read_csv('opening.csv', delimiter=" ")
-opening = opening.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-opening = opening.add_suffix('og')
-
-
-propel = pd.read_csv('propel.csv', delimiter=" ")
-propel = propel.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-propel = propel.add_suffix('pl')
-
-
-rise = pd.read_csv('rise.csv', delimiter=" ")
-rise = rise.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-rise = rise.add_suffix('re')
-
-
-roll = pd.read_csv('roll.csv', delimiter=" ")
-roll = roll.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-roll = roll.add_suffix('rl')
-
-
-shear = pd.read_csv('shear.csv', delimiter=" ")
-shear = shear.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-shear = shear.add_suffix('sr')
-
-
-shift = pd.read_csv('shift.csv', delimiter=" ")
-shift = shift.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-shift = shift.add_suffix('st')
-
-
-slide = pd.read_csv('slide.csv', delimiter=" ")
-slide = slide.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-slide = slide.add_suffix('se')
-
-
-stagger = pd.read_csv('stagger.csv', delimiter=" ")
-stagger = stagger.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-stagger = stagger.add_suffix('sg')
-
-
-stretch = pd.read_csv('stretch.csv', delimiter=" ")
-stretch = stretch.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-stretch = stretch.add_suffix('sh')
-
-
-tilt = pd.read_csv('tilt.csv', delimiter=" ")
-tilt = tilt.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-tilt = tilt.add_suffix('tt')
-
-
-tip = pd.read_csv('tip.csv', delimiter=" ")
-tip = tip.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-tip = tip.add_suffix('tp')
-
-
-twist = pd.read_csv('twist.csv', delimiter=" ")
-twist = twist.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-twist = twist.add_suffix('tw')
-
-
-xdisp = pd.read_csv('xdisp.csv', delimiter=" ")
-xdisp = xdisp.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-xdisp = xdisp.add_suffix('xp')
-
-
-ydisp = pd.read_csv('ydisp.csv', delimiter=" ")
-ydisp = ydisp.rename({'V1': '3', 'V2': '4', 'V3': '5', 'V4': '6','V5': '7', 'V6': '8','V7': '9', 'V8': '10','V9': '11', 'V10': '12','V11': '13', 'V12': '14','V13': '15', 'V14': '16','V15': '17', 'V16': '18', 'V17': '19', 'V18': '20', 'V19': '21', 'V20': '22', 'V21': '23'}, axis='columns')
-ydisp = ydisp.add_suffix('yp')
-
-
-merged_df = pd.concat([axbend, buckle, inclin, opening, propel, rise, roll, shear, shift, slide, stagger, stretch, tilt, tip, twist, xdisp, ydisp], axis="columns")
+merged_df = pd.concat(dfs, axis="columns").reset_index()
 pd.set_option('display.max_columns', None)
 merged_df
 
+# Assign hotspot (1) / non-hotspot (0) labels by matching each row's base sequence name
+hotspot_map = {
+    'APC_637': 1, 'APC_641': 0, 'APC_3335': 0, 'APC_3340': 1,
+    'APC_4099': 1, 'APC_4103': 0, 'APC_4343': 0, 'APC_4348': 1,
+    'TP53_632': 0, 'TP53_637': 1, 'TP53_844': 1, 'TP53_849': 0,
+}
 
-column_names = list(merged_df.columns.values)
-outcome_df = ['1', '1', '1', '1', '1', '1', '2', '2', '2', '2', '2', '2', '1', '1', '1', '2', '2', '2', '1', '1', '1', '1', '1', '1', '2', '2', '2', '1', '1', '1', '1', '1', '1', '2', '2', '2', '3', '3', '3', '3', '3', '3', '4', '4', '4', '4', '4', '4', '3', '3', '3', '4', '4', '4', '3', '3', '3', '3', '3', '3', '4', '4', '4', '3', '3', '3', '3', '3', '3', '4', '4', '4']  
-total_data = merged_df.assign(Outcome=outcome_df)
+merged_df['base_sequence'] = merged_df['sequence'].str.rsplit('_', n=1).str[0]
+merged_df['Outcome'] = merged_df['base_sequence'].map(hotspot_map)
+assert merged_df['Outcome'].isnull().sum() == 0, "Some sequences didn't match hotspot_map - check naming"
+
+total_data = merged_df.drop(columns=['sequence', 'base_sequence'])
 total_data
 
 #Establish X and y variables 
 X=total_data.drop(['Outcome'], axis=1)
 y=total_data['Outcome']
 
+# List of 20 predetermined random seeds
+random_seeds = [685641, 249077, 18533, 426353, 622463, 103321, 396546, 427173, 286636, 335318, 785535, 231325, 405031, 390995, 37176, 755657, 101777, 517844, 969889, 159625]
+
 
 # Splitting the dataset into the Training set and Test set
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size= 0.2, random_state=159625)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size= 0.2, random_state=159625, stratify=y)
 
 
 # Define hyperparamaters for Random Forest
 # Number of trees in random forest
 n_estimators = [int(x) for x in np.linspace(start = 1, stop = 100, num = 10)]
 # Number of features to consider at every split
-max_features = ['auto', 'sqrt']
+max_features = ['sqrt', 'log2']
 # Maximum number of levels in tree
 max_depth = [2,4]
 # Minimum number of samples required to split a node
 min_samples_split = [2, 5]
 # Minimum number of samples required at each leaf node
 min_samples_leaf = [1, 2]
-# Method of selecting samples for training each tree
-bootstrap = [True, False]
 
-# Create the param grid
+# Create the param grid (bootstrap is fixed at True, not searched - see earlier discussion)
 param_grid = {'n_estimators': n_estimators,
                'max_features': max_features,
                'max_depth': max_depth,
                'min_samples_split': min_samples_split,
-               'min_samples_leaf': min_samples_leaf,
-               'bootstrap': bootstrap}
+               'min_samples_leaf': min_samples_leaf}
 print(param_grid)
 
-# Random Forest
-rf_Model = RandomForestClassifier(bootstrap=False,
-                                  max_depth=4,
-                                  max_features='sqrt',
-                                  min_samples_leaf=2,
-                                  min_samples_split=2,
-                                  n_estimators=100,
-                                  random_state=159625)
+# Search the grid with 5-fold cross-validation on the training set only,
+# so the held-out test set stays untouched for the final evaluation below
+grid_search = GridSearchCV(RandomForestClassifier(bootstrap=True, random_state=159625),
+                            param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_search.fit(X_train, y_train)
+print("Best params:", grid_search.best_params_)
+print("Best CV accuracy:", grid_search.best_score_)
 
-rf_Model.fit(X_train,y_train)
+# best_rf_params is reused below for every other Random Forest in this script,
+# so all five methods are built on the same evidence-based configuration
+# instead of five separately-guessed ones
+best_rf_params = grid_search.best_params_
+
+# Random Forest - evaluated across all 20 seeds and averaged, rather than
+# trusting a single train/test split (with only 8 test rows, one split's
+# result can vary a lot from another purely by chance)
+accuracies, precisions, f1s, recalls, oob_scores = [], [], [], [], []
+
+for random_seed in random_seeds:
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
+
+    rf_Model = RandomForestClassifier(**best_rf_params,
+                                      bootstrap=True,
+                                      oob_score=True,
+                                      random_state=random_seed)
+    rf_Model.fit(X_train, y_train)
+
+    y_pred = rf_Model.predict(X_test)
+
+    accuracies.append(accuracy_score(y_test, y_pred))
+    precisions.append(precision_score(y_test, y_pred, average='weighted'))
+    f1s.append(f1_score(y_test, y_pred, average='weighted'))
+    recalls.append(recall_score(y_test, y_pred, average='weighted'))
+    oob_scores.append(rf_Model.oob_score_)
+
+print(f"Accuracy: {np.mean(accuracies):.3f} +/- {np.std(accuracies):.3f}")
+print(f"Precision: {np.mean(precisions):.3f} +/- {np.std(precisions):.3f}")
+print(f"f1: {np.mean(f1s):.3f} +/- {np.std(f1s):.3f}")
+print(f"Recall: {np.mean(recalls):.3f} +/- {np.std(recalls):.3f}")
+print(f"OOB Score: {np.mean(oob_scores):.3f} +/- {np.std(oob_scores):.3f}")
 
 
-# Predict the target variable for the test set
-y_pred = rf_Model.predict(X_test)
-
-# Evaluate the model
-accuracy = accuracy_score(y_test, y_pred)
-print("Accuracy:", accuracy)
-precision = precision_score(y_test, y_pred, average='weighted')
-print("Precision:", precision)
-f1 = f1_score(y_test, y_pred, average='weighted')
-print("f1:", f1)
-recall = recall_score(y_test, y_pred, average='weighted')
-print("Recall:", recall)
-
-
-
-# FEATURE SELECTION #1 - Lasso (L1)
-
-# List of 20 predetermined random seeds
-random_seeds = [685641, 249077, 18533, 426353, 622463, 103321, 396546, 427173, 286636, 335318, 785535, 231325, 405031, 390995, 37176, 755657, 101777, 517844, 969889, 159625]
-
-# Iterate through the random seeds
-for i, random_seed in enumerate(random_seeds, start=1):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed)
-
-    lasso = Lasso(alpha=1)
-
-    # Fit the model on the training data
-    lasso.fit(X_train, y_train)
-
-    # Get the selected features and their coefficients
-    selected_features = X_train.columns[lasso.coef_ != 0]
-    feature_coefficients = lasso.coef_[lasso.coef_ != 0]
-
-    # Create a DataFrame
-    coeff_df = pd.DataFrame({'Feature': selected_features, 'Coefficient': feature_coefficients})
-
-    # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = f'Lasso{i}.csv'
-    coeff_df.to_csv(filename, index=False)
 
 # FEATURE SELECTION #2 - Random Forest Importance Values
 
 # Iterate through the random seeds
 for i, random_seed in enumerate(random_seeds, start=1):
     np.random.seed(random_seed)  # Set the random seed
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
 
-
-    # Create a Random Forest Classifier
-    rf = RandomForestClassifier(bootstrap=False,
-                                max_depth=4,
-                                max_features='sqrt',
-                                min_samples_leaf=2,
-                                min_samples_split=2,
-                                n_estimators=100,
+    # Create a Random Forest Classifier (using the grid-searched hyperparameters)
+    rf = RandomForestClassifier(**best_rf_params,
+                                bootstrap=True,
                                 random_state=random_seed)
 
     # Train the Random Forest model
@@ -227,7 +163,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': selected_importances})
 
     # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = f'RFCI{i}.csv'
+    filename = os.path.join(feature_selection_dir, "RFCI", f"RFCI{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 
@@ -245,19 +181,15 @@ import numpy as np
 for i, random_seed in enumerate(random_seeds, start=1):
     np.random.seed(random_seed)  # Set the random seed
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
 
-    # Create a Random Forest Classifier
-    rf_Model = RandomForestClassifier(n_estimators=100,
-                                      max_features='sqrt',
-                                      max_depth=4,
-                                      min_samples_split=2,
-                                      min_samples_leaf=2,
+    # Create a Random Forest Classifier (using the grid-searched hyperparameters)
+    rf_Model = RandomForestClassifier(**best_rf_params,
                                       bootstrap=True,
                                       random_state=random_seed)
 
     # Perform Recursive Feature Elimination with Cross-Validation
-    rfecv = RFECV(estimator=rf_Model, cv=5, step=1)  # Set the step value to 1 for forward selection
+    rfecv = RFECV(estimator=rf_Model, cv=5, step=1, n_jobs=-1)  # Set the step value to 1 for forward selection
     X_train_selected = rfecv.fit_transform(X_train, y_train)
 
     # Get the selected features' indices
@@ -273,70 +205,89 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': feature_importances})
 
     # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = f'RFECV_{i}.csv'
+    filename = os.path.join(feature_selection_dir, "RFECV", f"RFECV_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 
-# FEATURE SELECTION #4 - Dispersion Ratio
+# FEATURE SELECTION #5 - Permutation Importance (cross-validated)
+# Unlike RF Importance (#2), which uses scikit-learn's built-in impurity-based
+# feature_importances_, this measures how much accuracy drops when each
+# feature's values are randomly shuffled - it isn't biased toward continuous
+# or correlated features the way impurity-based importance can be, which
+# matters here since every feature is continuous and many are adjacent
+# base-pair positions or physically related parameters.
+#
+# Computed via 5-fold cross-validation rather than a single 80/20 split:
+# with only 36 rows, a single ~7-row test set is too small for shuffling
+# to change many predictions (importance comes back ~0 for every feature).
+# Cross-validation uses every row as held-out data at some point, and the
+# importance from each fold is averaged into one score per feature per seed.
 
 # Iterate through the random seeds
 for i, random_seed in enumerate(random_seeds, start=1):
     np.random.seed(random_seed)  # Set the random seed
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed)
+    fold_importances = []
 
-    am = np.mean(X_train, axis=0)
-    gm = np.power(np.prod(X_train, axis=0), 1 / X_train.shape[0])
-    disp_ratio = am / gm
+    for train_idx, test_idx in cv.split(X, y):
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
-    plt.bar(np.arange(X_train.shape[1]), disp_ratio, color='teal')
+        # Create a Random Forest Classifier (using the grid-searched hyperparameters)
+        rf = RandomForestClassifier(**best_rf_params,
+                                    bootstrap=True,
+                                    random_state=random_seed)
 
-    # Save the plot as an image file with a different name for each random seed
-    filename = f'DispersionRatio_{i}.png'
-    plt.savefig(filename)
-    plt.clf()  # Clear the plot for the next iteration
+        # Train the Random Forest model
+        rf.fit(X_train, y_train)
 
+        # Compute permutation importance on this fold's held-out rows
+        # n_repeats=10 keeps runtime reasonable; fold-averaging (not repeats alone)
+        # is what stabilises the estimate here. n_jobs=-1 parallelises across cores.
+        result = permutation_importance(rf, X_test, y_test, n_repeats=10, random_state=random_seed, n_jobs=-1)
+        fold_importances.append(result.importances_mean)
 
-# FEATURE SELECTION #5 - Exhaustive Feature Selection with Cross-Validation (EFSCV) 
-# Iterate through the random seeds
-for i, random_seed in enumerate(random_seeds, start=1):
-    np.random.seed(random_seed)  # Set the random seed
+    # Average importance across the 5 folds
+    mean_importances = np.mean(fold_importances, axis=0)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    # Sort features by importance in descending order
+    sorted_indices = mean_importances.argsort()[::-1]
 
-    # Create a Random Forest Classifier
-    rf = RandomForestClassifier(bootstrap=False,
-                                max_depth=4,
-                                max_features='sqrt',
-                                min_samples_leaf=2,
-                                min_samples_split=2,
-                                n_estimators=100,
-                                random_state=random_seed)
+    # Select the top features based on importance
+    top_feature_indices = sorted_indices[:40]
 
-    # Get all possible feature combinations
-    all_features = X_train.columns
-    num_features = len(all_features)
-    selected_features = []
+    # Subset the original feature names using the selected indices
+    selected_features = X.columns[top_feature_indices]
+    selected_importances = mean_importances[top_feature_indices]
 
-    for k in range(1, num_features + 1):
-        for subset in combinations(all_features, k):
-            X_train_selected = X_train[list(subset)]
-            scores = cross_val_score(rf, X_train_selected, y_train, cv=5)  # Perform 5-fold cross-validation
-            accuracy = np.mean(scores)
-
-            if len(selected_features) == 0 or accuracy > selected_features[-1][0]:
-                selected_features.append((accuracy, subset))
-
-    # Sort the selected features by accuracy
-    selected_features.sort(reverse=True)
-
-    # Get the best feature subset
-    best_accuracy, best_subset = selected_features[0]
-    best_features = list(best_subset)
-
-    # Create a DataFrame with selected features and accuracies
-    coeff_df = pd.DataFrame({'Feature': best_features, 'Accuracy': best_accuracy})
+    # Create a DataFrame with selected features and importances
+    coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': selected_importances})
 
     # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = f'EFSCV_{i}.csv'
+    filename = os.path.join(feature_selection_dir, "PermImportance", f"PermImportance_{i}.csv")
     coeff_df.to_csv(filename, index=False)
+
+
+# ============================================================
+# AGGREGATION - run each RF-specific aggregator now that all 20-file sets
+# exist. Kept as separate scripts (not merged in) so each stays focused and
+# can still be rerun individually - subprocess.run just calls them in
+# sequence from here, using sys.executable so this works whichever Python
+# (base Anaconda, a venv, etc.) is actually running this script.
+#
+# Lasso and Dispersion Ratio are NOT called here anymore - they don't depend
+# on the model, so lasso_aggregate.py and dispratio_aggregate.py now
+# generate their own 20 seeds AND aggregate them in one standalone run
+# (run each of those once, independently of RandomForest.py/svm.py/xgb.py).
+# ============================================================
+
+aggregation_scripts = [
+    "aggregate_RFCI.py",
+    "aggregate_RFECV.py",
+    "aggregate_perm.py",
+]
+
+for script in aggregation_scripts:
+    print(f"Running {script}...")
+    subprocess.run([sys.executable, script], check=True)

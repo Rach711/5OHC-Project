@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 import os
 
-feature_selection_dir = "../feature_selection"
+feature_selection_dir = "../feature_selection/rf"
 folder = os.path.join(feature_selection_dir, "PermImportance")
 
 files = sorted(glob.glob(os.path.join(folder, "PermImportance_*.csv")))
