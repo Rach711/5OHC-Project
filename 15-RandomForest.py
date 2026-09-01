@@ -163,7 +163,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': selected_importances})
 
     # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = os.path.join(feature_selection_dir, "RFCI", f"RFCI{i}.csv")
+    filename = os.path.join(feature_selection_dir, "RFCI", f"RF_RFCI_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 
@@ -205,7 +205,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': feature_importances})
 
     # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = os.path.join(feature_selection_dir, "RFECV", f"RFECV_{i}.csv")
+    filename = os.path.join(feature_selection_dir, "RFECV", f"RF_RFECV_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 
@@ -265,7 +265,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': selected_importances})
 
     # Save the DataFrame as a CSV file with a different name for each random seed
-    filename = os.path.join(feature_selection_dir, "PermImportance", f"PermImportance_{i}.csv")
+    filename = os.path.join(feature_selection_dir, "PermImportance", f"RF_PermImportance_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 

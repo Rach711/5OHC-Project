@@ -134,7 +134,7 @@ weighted_loading_scores = np.sum(np.abs(loadings) * variance_weights[:, np.newax
 
 loadings_df = pd.DataFrame({'Feature': X.columns, 'WeightedLoading': weighted_loading_scores})
 loadings_df = loadings_df.sort_values('WeightedLoading', ascending=False).reset_index(drop=True)
-loadings_df.to_csv(os.path.join(kmeans_feature_selection_dir, "PCALoadings", "PCALoadings.csv"), index=False)
+loadings_df.to_csv(os.path.join(kmeans_feature_selection_dir, "PCALoadings", "KMeans_PCALoadings.csv"), index=False)
 
 print("PCA Loadings done")
 print("Top 10 features by weighted PCA loading:")
@@ -174,7 +174,7 @@ for feat_idx in range(X.shape[1]):
 
 silhouette_perm_df = pd.DataFrame({'Feature': X.columns, 'SilhouetteDrop': importances})
 silhouette_perm_df = silhouette_perm_df.sort_values('SilhouetteDrop', ascending=False).reset_index(drop=True)
-silhouette_perm_df.to_csv(os.path.join(kmeans_feature_selection_dir, "SilhouettePermImportance", "SilhouettePermImportance.csv"), index=False)
+silhouette_perm_df.to_csv(os.path.join(kmeans_feature_selection_dir, "SilhouettePermImportance", "KMeans_SilhouettePermImportance.csv"), index=False)
 
 print("Silhouette-based Permutation Importance done")
 print("Top 10 features by silhouette score drop when shuffled:")

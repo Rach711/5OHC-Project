@@ -5,7 +5,7 @@ import os
 feature_selection_dir = "../feature_selection/rf"
 folder = os.path.join(feature_selection_dir, "RFCI")
 
-files = sorted(glob.glob(os.path.join(folder, "RFCI*.csv")))
+files = sorted(glob.glob(os.path.join(folder, "RF_RFCI_[0-9]*.csv")))
 n_seeds = len(files)
 
 combined = pd.concat(pd.read_csv(f)[['Feature', 'Importance']] for f in files)
@@ -20,7 +20,7 @@ summary = combined.groupby('Feature').agg(
 summary['pct_of_runs'] = summary['times_selected'] / n_seeds * 100
 summary = summary.sort_values(['times_selected', 'mean_importance'], ascending=[False, False]).reset_index(drop=True)
 
-summary.to_csv(os.path.join(feature_selection_dir, "RFCI", "RFCI_summary.csv"), index=False)
+summary.to_csv(os.path.join(feature_selection_dir, "RFCI", "RF_RFCI_summary.csv"), index=False)
 
 print(f"RF Importance: {len(summary)} distinct features in the top 40 at least once across {n_seeds} runs")
 print("Top 15 by how often they were selected:")

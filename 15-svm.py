@@ -56,13 +56,22 @@ random_seeds = [685641, 249077, 18533, 426353, 622463, 103321, 396546, 427173, 2
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=159625, stratify=y)
 
+# Restricted to a linear kernel: with n=36 (~29 training rows per fold) and
+# 360 features, this is a p>>n regime where rbf's extra gamma flexibility
+# has little data to be reliably estimated from - any CV accuracy edge rbf
+# picks up is likely to be an artifact of a particular fold split rather
+# than real nonlinear structure. Confirmed empirically too: the grid search
+# selected 'linear', C=0.1 over every rbf option that was tried. Restricting
+# to linear also means best_svm_params can be safely reused everywhere below
+# (SVMCoef/RFECV need .coef_, which only exists for a linear kernel anyway),
+# matching how RF/XGBoost reuse one grid-searched config throughout.
 svm_param_grid = {'svm__kernel': ['linear'], 'svm__C': [0.01, 0.1, 1, 10, 100]}
- 
+
 svm_pipeline = Pipeline([
     ('scaler', StandardScaler()),
     ('svm', SVC(random_state=159625))
 ])
- 
+
 svm_grid_search = GridSearchCV(svm_pipeline, svm_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
 svm_grid_search.fit(X_train, y_train)
 print("Best SVM params:", svm_grid_search.best_params_)
@@ -74,21 +83,21 @@ svm_accuracies, svm_precisions, svm_f1s, svm_recalls = [], [], [], []
 
 for random_seed in random_seeds:
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
- 
+
     svm_model = Pipeline([
         ('scaler', StandardScaler()),
         ('svm', SVC(**{k.replace('svm__', ''): v for k, v in best_svm_params.items()},
                     random_state=random_seed))
     ])
     svm_model.fit(X_train, y_train)
- 
+
     y_pred = svm_model.predict(X_test)
- 
+
     svm_accuracies.append(accuracy_score(y_test, y_pred))
     svm_precisions.append(precision_score(y_test, y_pred, average='weighted'))
     svm_f1s.append(f1_score(y_test, y_pred, average='weighted'))
     svm_recalls.append(recall_score(y_test, y_pred, average='weighted'))
- 
+
 print(f"SVM Accuracy: {np.mean(svm_accuracies):.3f} +/- {np.std(svm_accuracies):.3f}")
 print(f"SVM Precision: {np.mean(svm_precisions):.3f} +/- {np.std(svm_precisions):.3f}")
 print(f"SVM f1: {np.mean(svm_f1s):.3f} +/- {np.std(svm_f1s):.3f}")
@@ -101,22 +110,22 @@ print(f"SVM Recall: {np.mean(svm_recalls):.3f} +/- {np.std(svm_recalls):.3f}")
 
 for i, random_seed in enumerate(random_seeds, start=1):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
- 
+
     svm_coef_model = Pipeline([
         ('scaler', StandardScaler()),
         ('svm', SVC(**{k.replace('svm__', ''): v for k, v in best_svm_params.items()},
                     random_state=random_seed))
     ])
     svm_coef_model.fit(X_train, y_train)
- 
+
     coefs = svm_coef_model.named_steps['svm'].coef_[0]
     sorted_idx = np.abs(coefs).argsort()[::-1]
     top_idx = sorted_idx[:40]
- 
+
     coeff_df = pd.DataFrame({'Feature': X_train.columns[top_idx], 'Coefficient': coefs[top_idx]})
-    filename = os.path.join(svm_feature_selection_dir, "SVMCoef", f"SVMCoef_{i}.csv")
+    filename = os.path.join(svm_feature_selection_dir, "SVMCoef", f"SVM_SVMCoef_{i}.csv")
     coeff_df.to_csv(filename, index=False)
- 
+
 print("SVMCoef done")
 
 
@@ -126,57 +135,62 @@ print("SVMCoef done")
 
 for i, random_seed in enumerate(random_seeds, start=1):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
- 
+
     svm_rfecv_pipeline = Pipeline([
         ('scaler', StandardScaler()),
         ('svm', SVC(**{k.replace('svm__', ''): v for k, v in best_svm_params.items()},
                     random_state=random_seed))
     ])
- 
+
     rfecv = RFECV(estimator=svm_rfecv_pipeline, cv=5, step=1, n_jobs=-1,
                   importance_getter='named_steps.svm.coef_')
     rfecv.fit(X_train, y_train)
- 
+
     selected_features = X_train.columns[rfecv.get_support()]
     coefs = rfecv.estimator_.named_steps['svm'].coef_[0]
- 
+
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Coefficient': coefs})
-    filename = os.path.join(svm_feature_selection_dir, "RFECV", f"RFECV_{i}.csv")
+    filename = os.path.join(svm_feature_selection_dir, "RFECV", f"SVM_RFECV_{i}.csv")
     coeff_df.to_csv(filename, index=False)
- 
+
 print("RFECV done")
 
 
 # ============================================================
-# FEATURE SELECTION #5 - Permutation Importance (cross-validated, any kernel)
+# FEATURE SELECTION #5 - Permutation Importance (cross-validated)
+# Doesn't touch .coef_, so unlike SVMCoef/RFECV it isn't technically
+# restricted to a linear kernel - but reuses best_svm_params here too, for
+# the same reason RF/XGBoost's permutation importance reuses their
+# grid-searched config: one evidence-based model backs every method below,
+# rather than a separately hardcoded one for this block alone.
 # ============================================================
 
 for i, random_seed in enumerate(random_seeds, start=1):
     np.random.seed(random_seed)
- 
+
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed)
     fold_importances = []
- 
+
     for train_idx, test_idx in cv.split(X, y):
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
- 
+
         svm_perm_model = Pipeline([
             ('scaler', StandardScaler()),
             ('svm', SVC(**{k.replace('svm__', ''): v for k, v in best_svm_params.items()},
                         random_state=random_seed))
         ])
         svm_perm_model.fit(X_train, y_train)
- 
+
         result = permutation_importance(svm_perm_model, X_test, y_test, n_repeats=10, random_state=random_seed, n_jobs=-1)
         fold_importances.append(result.importances_mean)
- 
+
     mean_importances = np.mean(fold_importances, axis=0)
     sorted_idx = mean_importances.argsort()[::-1]
     top_idx = sorted_idx[:40]
- 
+
     coeff_df = pd.DataFrame({'Feature': X.columns[top_idx], 'Importance': mean_importances[top_idx]})
-    filename = os.path.join(svm_feature_selection_dir, "PermImportance", f"PermImportance_{i}.csv")
+    filename = os.path.join(svm_feature_selection_dir, "PermImportance", f"SVM_PermImportance_{i}.csv")
     coeff_df.to_csv(filename, index=False)
- 
+
 print("Permutation Importance done")

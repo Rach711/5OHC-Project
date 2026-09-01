@@ -119,7 +119,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     top_idx = sorted_idx[:40]
 
     coeff_df = pd.DataFrame({'Feature': X_train.columns[top_idx], 'Importance': importances[top_idx]})
-    filename = os.path.join(xgb_feature_selection_dir, "XGBImportance", f"XGBImportance_{i}.csv")
+    filename = os.path.join(xgb_feature_selection_dir, "XGBImportance", f"XGB_XGBImportance_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 print("XGBImportance done")
@@ -141,7 +141,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     importances = rfecv.estimator_.feature_importances_
 
     coeff_df = pd.DataFrame({'Feature': selected_features, 'Importance': importances})
-    filename = os.path.join(xgb_feature_selection_dir, "RFECV", f"RFECV_{i}.csv")
+    filename = os.path.join(xgb_feature_selection_dir, "RFECV", f"XGB_RFECV_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 print("RFECV done")
@@ -171,7 +171,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     top_idx = sorted_idx[:40]
 
     coeff_df = pd.DataFrame({'Feature': X.columns[top_idx], 'Importance': mean_importances[top_idx]})
-    filename = os.path.join(xgb_feature_selection_dir, "PermImportance", f"PermImportance_{i}.csv")
+    filename = os.path.join(xgb_feature_selection_dir, "PermImportance", f"XGB_PermImportance_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 print("Permutation Importance done")
