@@ -6,21 +6,17 @@ from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKF
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.linear_model import Lasso
 from sklearn.feature_selection import RFECV
 from sklearn.inspection import permutation_importance
 
 # Importing the datasets
 csv_dir = "../parameters_csv"
 
-# Lasso and Dispersion Ratio don't depend on the model at all, so they write
-# into the SAME folders as the Random Forest run - their output would be
-# identical either way, and this avoids two out-of-sync copies of the same
-# result. SVMCoef, RFECV, and PermImportance are genuinely SVM-specific.
-shared_feature_selection_dir = "../feature_selection"
-svm_feature_selection_dir = "../feature_selection_svm"
-for subfolder in ["Lasso", "DispersionRatio"]:
-    os.makedirs(os.path.join(shared_feature_selection_dir, subfolder), exist_ok=True)
+# Lasso and Dispersion Ratio are generated separately by
+# SharedFeatureSelection.py (run that once - it doesn't depend on the model,
+# so there's no reason to duplicate it here). SVMCoef, RFECV, and
+# PermImportance are genuinely SVM-specific and stay in this script.
+svm_feature_selection_dir = "../feature_selection/svm"
 for subfolder in ["SVMCoef", "RFECV", "PermImportance"]:
     os.makedirs(os.path.join(svm_feature_selection_dir, subfolder), exist_ok=True)
 
@@ -103,26 +99,6 @@ print(f"SVM Recall: {np.mean(svm_recalls):.3f} +/- {np.std(svm_recalls):.3f}")
 
 
 # ============================================================
-# FEATURE SELECTION #1 - Lasso (model-independent, shared output)
-# ============================================================
-
-for i, random_seed in enumerate(random_seeds, start=1):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
-
-    lasso = Lasso(alpha=1, random_state=random_seed)
-    lasso.fit(X_train, y_train)
-
-    coefs = lasso.coef_
-    nonzero_idx = np.nonzero(coefs)[0]
-
-    coeff_df = pd.DataFrame({'Feature': X_train.columns[nonzero_idx], 'Coefficient': coefs[nonzero_idx]})
-    filename = os.path.join(shared_feature_selection_dir, "Lasso", f"Lasso{i}.csv")
-    coeff_df.to_csv(filename, index=False)
-
-print("Lasso done")
-
-
-# ============================================================
 # FEATURE SELECTION #2 - SVM Coefficient Magnitude (linear-kernel only)
 # ============================================================
 
@@ -170,26 +146,6 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df.to_csv(filename, index=False)
 
 print("RFECV done")
-
-
-# ============================================================
-# FEATURE SELECTION #4 - Dispersion Ratio (model-independent, shared output)
-# ============================================================
-
-for i, random_seed in enumerate(random_seeds, start=1):
-    np.random.seed(random_seed)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
-
-    am = np.mean(X_train, axis=0)
-    gm = np.power(np.prod(X_train, axis=0), 1 / X_train.shape[0])
-    disp_ratio = am / gm
-
-    disp_df = pd.DataFrame({'Feature': X_train.columns, 'DispersionRatio': disp_ratio})
-    csv_filename = os.path.join(shared_feature_selection_dir, "DispersionRatio", f"DispersionRatio_{i}.csv")
-    disp_df.to_csv(csv_filename, index=False)
-
-print("Dispersion Ratio done")
 
 
 # ============================================================

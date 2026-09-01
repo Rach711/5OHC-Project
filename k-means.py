@@ -45,12 +45,11 @@ y = total_data['Outcome'].to_numpy()
 # is unsupervised and has no natural train/test framing of its own
 random_seeds = [685641, 249077, 18533, 426353, 622463, 103321, 396546, 427173, 286636, 335318, 785535, 231325, 405031, 390995, 37176, 755657, 101777, 517844, 969889, 159625]
 
-# Dispersion Ratio doesn't depend on the model at all, so it writes into the
-# same shared folder as the other scripts. PCA loadings and silhouette-based
-# permutation importance are specific to this clustering pipeline.
-shared_feature_selection_dir = "../feature_selection"
-kmeans_feature_selection_dir = "../feature_selection_kmeans"
-os.makedirs(os.path.join(shared_feature_selection_dir, "DispersionRatio"), exist_ok=True)
+# Dispersion Ratio is generated separately by SharedFeatureSelection.py (run
+# that once - it doesn't depend on the model, so there's no reason to
+# duplicate it here). PCA loadings and silhouette-based permutation
+# importance are specific to this clustering pipeline and stay in this script.
+kmeans_feature_selection_dir = "../feature_selection/kmeans"
 for subfolder in ["PCALoadings", "SilhouettePermImportance"]:
     os.makedirs(os.path.join(kmeans_feature_selection_dir, subfolder), exist_ok=True)
 
@@ -115,30 +114,6 @@ print(f"Aligned accuracy vs known labels: {np.mean(aligned_accuracies):.3f} +/- 
 print(f"Adjusted Rand Index: {np.mean(aris):.3f} +/- {np.std(aris):.3f}")
 print(f"Normalized Mutual Information: {np.mean(nmis):.3f} +/- {np.std(nmis):.3f}")
 print(f"Silhouette score: {np.mean(silhouettes):.3f} +/- {np.std(silhouettes):.3f}")
-
-
-# ============================================================
-# FEATURE SELECTION #1 - Dispersion Ratio (model-independent, shared output)
-# Identical logic to RandomForest.py/SVM.py/XGBoost.py so the shared folder
-# stays consistent regardless of which script generated it - uses X_train
-# from a stratified split per seed, same as those, even though the K-means
-# model above fits on the full X rather than a split.
-# ============================================================
-
-for i, random_seed in enumerate(random_seeds, start=1):
-    np.random.seed(random_seed)
-
-    X_train_dr, X_test_dr, y_train_dr, y_test_dr = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
-
-    am = np.mean(X_train_dr, axis=0)
-    gm = np.power(np.prod(X_train_dr, axis=0), 1 / X_train_dr.shape[0])
-    disp_ratio = am / gm
-
-    disp_df = pd.DataFrame({'Feature': X_train_dr.columns, 'DispersionRatio': disp_ratio})
-    csv_filename = os.path.join(shared_feature_selection_dir, "DispersionRatio", f"DispersionRatio_{i}.csv")
-    disp_df.to_csv(csv_filename, index=False)
-
-print("Dispersion Ratio done")
 
 
 # ============================================================

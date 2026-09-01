@@ -19,10 +19,15 @@ from sklearn.model_selection import GridSearchCV
 # Importing the datasets
 csv_dir = "../parameters_csv"
 
-# Output folders for feature selection results - one per method,
-# all inside a feature_selection folder adjacent to Scripts/ and the CSVs folder
-feature_selection_dir = "../feature_selection_rf"
-for subfolder in ["Lasso", "RFCI", "RFECV", "DispersionRatio", "PermImportance"]:
+# Output folders - Lasso and Dispersion Ratio go under "shared" (they don't
+# depend on the model), RFCI/RFECV/PermImportance go under "rf" (they do) -
+# both live under one parent feature_selection folder, adjacent to Scripts/
+# and the CSVs folder, alongside svm/xgb/kmeans subfolders from those scripts
+shared_dir = "../feature_selection/shared"
+feature_selection_dir = "../feature_selection/rf"
+for subfolder in ["Lasso", "DispersionRatio"]:
+    os.makedirs(os.path.join(shared_dir, subfolder), exist_ok=True)
+for subfolder in ["RFCI", "RFECV", "PermImportance"]:
     os.makedirs(os.path.join(feature_selection_dir, subfolder), exist_ok=True)
 
 params = ["tbend", "shear", "stretch", "stagger", "buckle", "propel", "opening",
@@ -142,7 +147,7 @@ for i, random_seed in enumerate(random_seeds, start=1):
     nonzero_idx = np.nonzero(coefs)[0]
 
     coeff_df = pd.DataFrame({'Feature': X_train.columns[nonzero_idx], 'Coefficient': coefs[nonzero_idx]})
-    filename = os.path.join(feature_selection_dir, "Lasso", f"Lasso{i}.csv")
+    filename = os.path.join(shared_dir, "Lasso", f"Lasso{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
 print("Lasso done")
@@ -238,11 +243,11 @@ for i, random_seed in enumerate(random_seeds, start=1):
     disp_ratio = am / gm
 
     plt.bar(np.arange(X_train.shape[1]), disp_ratio, color='teal')
-    plt.savefig(os.path.join(feature_selection_dir, "DispersionRatio", f"DispersionRatio_{i}.png"))
+    plt.savefig(os.path.join(shared_dir, "DispersionRatio", f"DispersionRatio_{i}.png"))
     plt.clf()
 
     disp_df = pd.DataFrame({'Feature': X_train.columns, 'DispersionRatio': disp_ratio})
-    csv_filename = os.path.join(feature_selection_dir, "DispersionRatio", f"DispersionRatio_{i}.csv")
+    csv_filename = os.path.join(shared_dir, "DispersionRatio", f"DispersionRatio_{i}.csv")
     disp_df.to_csv(csv_filename, index=False)
 
 print("Dispersion Ratio done")
@@ -320,8 +325,8 @@ aggregation_scripts = [
     "aggregate_lasso.py",
     "aggregate_rfci.py",
     "aggregate_rfecv.py",
-    "aggregate_dispersionratio.py",
-    "aggregate_permimportance.py",
+    "aggregate_dispratio.py",
+    "aggregate_perm.py",
 ]
 
 for script in aggregation_scripts:

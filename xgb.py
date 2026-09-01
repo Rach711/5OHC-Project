@@ -4,7 +4,6 @@ import os
 from sklearn.metrics import accuracy_score, recall_score, f1_score, precision_score
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from xgboost import XGBClassifier
-from sklearn.linear_model import Lasso
 from sklearn.feature_selection import RFECV
 from sklearn.inspection import permutation_importance
 
@@ -43,14 +42,11 @@ y = total_data['Outcome']
 # Same 20 seeds as RandomForest.py and SVM.py, so results are directly comparable
 random_seeds = [685641, 249077, 18533, 426353, 622463, 103321, 396546, 427173, 286636, 335318, 785535, 231325, 405031, 390995, 37176, 755657, 101777, 517844, 969889, 159625]
 
-# Lasso and Dispersion Ratio don't depend on the model at all, so they write
-# into the SAME folders as the Random Forest run - their output would be
-# identical either way. XGBImportance, RFECV, and PermImportance are
-# genuinely XGBoost-specific.
-shared_feature_selection_dir = "../feature_selection"
-xgb_feature_selection_dir = "../feature_selection_xgb"
-for subfolder in ["Lasso", "DispersionRatio"]:
-    os.makedirs(os.path.join(shared_feature_selection_dir, subfolder), exist_ok=True)
+# Lasso and Dispersion Ratio are generated separately by
+# SharedFeatureSelection.py (run that once - it doesn't depend on the model,
+# so there's no reason to duplicate it here). XGBImportance, RFECV, and
+# PermImportance are genuinely XGBoost-specific and stay in this script.
+xgb_feature_selection_dir = "../feature_selection/xgb"
 for subfolder in ["XGBImportance", "RFECV", "PermImportance"]:
     os.makedirs(os.path.join(xgb_feature_selection_dir, subfolder), exist_ok=True)
 
@@ -109,26 +105,6 @@ print(f"XGBoost Recall: {np.mean(xgb_recalls):.3f} +/- {np.std(xgb_recalls):.3f}
 
 
 # ============================================================
-# FEATURE SELECTION #1 - Lasso (model-independent, shared output)
-# ============================================================
-
-for i, random_seed in enumerate(random_seeds, start=1):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
-
-    lasso = Lasso(alpha=1, random_state=random_seed)
-    lasso.fit(X_train, y_train)
-
-    coefs = lasso.coef_
-    nonzero_idx = np.nonzero(coefs)[0]
-
-    coeff_df = pd.DataFrame({'Feature': X_train.columns[nonzero_idx], 'Coefficient': coefs[nonzero_idx]})
-    filename = os.path.join(shared_feature_selection_dir, "Lasso", f"Lasso{i}.csv")
-    coeff_df.to_csv(filename, index=False)
-
-print("Lasso done")
-
-
-# ============================================================
 # FEATURE SELECTION #2 - XGBoost Feature Importance (gain-based)
 # ============================================================
 
@@ -169,27 +145,6 @@ for i, random_seed in enumerate(random_seeds, start=1):
     coeff_df.to_csv(filename, index=False)
 
 print("RFECV done")
-
-
-# ============================================================
-# FEATURE SELECTION #4 - Dispersion Ratio (model-independent, shared output)
-# ============================================================
-
-for i, random_seed in enumerate(random_seeds, start=1):
-    np.random.seed(random_seed)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed, stratify=y)
-
-    am = np.mean(X_train, axis=0)
-    gm = np.power(np.prod(X_train, axis=0), 1 / X_train.shape[0])
-    disp_ratio = am / gm
-
-    disp_df = pd.DataFrame({'Feature': X_train.columns, 'DispersionRatio': disp_ratio})
-    csv_filename = os.path.join(shared_feature_selection_dir, "DispersionRatio", f"DispersionRatio_{i}.csv")
-    disp_df.to_csv(csv_filename, index=False)
-
-print("Dispersion Ratio done")
-
 
 # ============================================================
 # FEATURE SELECTION #5 - Permutation Importance (cross-validated)
