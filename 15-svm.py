@@ -103,6 +103,27 @@ print(f"SVM Precision: {np.mean(svm_precisions):.3f} +/- {np.std(svm_precisions)
 print(f"SVM f1: {np.mean(svm_f1s):.3f} +/- {np.std(svm_f1s):.3f}")
 print(f"SVM Recall: {np.mean(svm_recalls):.3f} +/- {np.std(svm_recalls):.3f}")
 
+# ============================================================
+# SAVE PERFORMANCE METRICS - previously print-only, so every rerun
+# silently overwrote the last one. Written alongside the feature
+# selection output rather than into it, since this is a summary
+# table, not a per-seed file like SVMCoef/RFECV/PermImportance.
+# ============================================================
+performance_dir = "../performance"
+os.makedirs(performance_dir, exist_ok=True)
+
+with open(os.path.join(performance_dir, "SVM_best_params.txt"), "w") as f:
+    f.write(f"Best params: {best_svm_params}\n")
+    f.write(f"Best CV accuracy: {svm_grid_search.best_score_:.6f}\n")
+
+svm_performance = pd.DataFrame({
+    "Metric": ["Accuracy", "Precision", "F1", "Recall"],
+    "Mean": [np.mean(svm_accuracies), np.mean(svm_precisions), np.mean(svm_f1s), np.mean(svm_recalls)],
+    "Std": [np.std(svm_accuracies), np.std(svm_precisions), np.std(svm_f1s), np.std(svm_recalls)],
+})
+svm_performance.to_csv(os.path.join(performance_dir, "SVM_performance.csv"), index=False)
+print(f"Saved performance metrics to {performance_dir}/SVM_performance.csv")
+
 
 # ============================================================
 # FEATURE SELECTION #2 - SVM Coefficient Magnitude (linear-kernel only)

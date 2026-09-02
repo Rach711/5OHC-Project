@@ -2,8 +2,6 @@ import sklearn
 import pandas as pd
 import numpy as np
 import os
-import subprocess
-import sys
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -129,6 +127,27 @@ print(f"f1: {np.mean(f1s):.3f} +/- {np.std(f1s):.3f}")
 print(f"Recall: {np.mean(recalls):.3f} +/- {np.std(recalls):.3f}")
 print(f"OOB Score: {np.mean(oob_scores):.3f} +/- {np.std(oob_scores):.3f}")
 
+# ============================================================
+# SAVE PERFORMANCE METRICS - previously print-only, so every rerun
+# silently overwrote the last one. Written alongside the feature
+# selection output rather than into it, since this is a summary
+# table, not a per-seed file like RFCI/RFECV/PermImportance.
+# ============================================================
+performance_dir = "../performance"
+os.makedirs(performance_dir, exist_ok=True)
+
+with open(os.path.join(performance_dir, "RF_best_params.txt"), "w") as f:
+    f.write(f"Best params: {best_rf_params}\n")
+    f.write(f"Best CV accuracy: {grid_search.best_score_:.6f}\n")
+
+rf_performance = pd.DataFrame({
+    "Metric": ["Accuracy", "Precision", "F1", "Recall", "OOB_Score"],
+    "Mean": [np.mean(accuracies), np.mean(precisions), np.mean(f1s), np.mean(recalls), np.mean(oob_scores)],
+    "Std": [np.std(accuracies), np.std(precisions), np.std(f1s), np.std(recalls), np.std(oob_scores)],
+})
+rf_performance.to_csv(os.path.join(performance_dir, "RF_performance.csv"), index=False)
+print(f"Saved performance metrics to {performance_dir}/RF_performance.csv")
+
 
 
 # FEATURE SELECTION #2 - Random Forest Importance Values
@@ -165,6 +184,8 @@ for i, random_seed in enumerate(random_seeds, start=1):
     # Save the DataFrame as a CSV file with a different name for each random seed
     filename = os.path.join(feature_selection_dir, "RFCI", f"RF_RFCI_{i}.csv")
     coeff_df.to_csv(filename, index=False)
+
+print("RFCI done")
 
 
 # FEATURE SELECTION #3 - Recursive Feature Elimination with Cross-Validation
@@ -207,6 +228,8 @@ for i, random_seed in enumerate(random_seeds, start=1):
     # Save the DataFrame as a CSV file with a different name for each random seed
     filename = os.path.join(feature_selection_dir, "RFECV", f"RF_RFECV_{i}.csv")
     coeff_df.to_csv(filename, index=False)
+
+print("RFECV done")
 
 
 # FEATURE SELECTION #5 - Permutation Importance (cross-validated)
@@ -268,26 +291,4 @@ for i, random_seed in enumerate(random_seeds, start=1):
     filename = os.path.join(feature_selection_dir, "PermImportance", f"RF_PermImportance_{i}.csv")
     coeff_df.to_csv(filename, index=False)
 
-
-# ============================================================
-# AGGREGATION - run each RF-specific aggregator now that all 20-file sets
-# exist. Kept as separate scripts (not merged in) so each stays focused and
-# can still be rerun individually - subprocess.run just calls them in
-# sequence from here, using sys.executable so this works whichever Python
-# (base Anaconda, a venv, etc.) is actually running this script.
-#
-# Lasso and Dispersion Ratio are NOT called here anymore - they don't depend
-# on the model, so lasso_aggregate.py and dispratio_aggregate.py now
-# generate their own 20 seeds AND aggregate them in one standalone run
-# (run each of those once, independently of RandomForest.py/svm.py/xgb.py).
-# ============================================================
-
-aggregation_scripts = [
-    "aggregate_RFCI.py",
-    "aggregate_RFECV.py",
-    "aggregate_perm.py",
-]
-
-for script in aggregation_scripts:
-    print(f"Running {script}...")
-    subprocess.run([sys.executable, script], check=True)
+print("Permutation Importance done")

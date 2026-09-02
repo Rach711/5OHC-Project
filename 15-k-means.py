@@ -8,7 +8,6 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, silhouette_score
 
-# Importing the datasets - same logic as RandomForest.py
 csv_dir = "../parameters_csv"
 
 params = ["tbend", "shear", "stretch", "stagger", "buckle", "propel", "opening",
@@ -114,6 +113,27 @@ print(f"Aligned accuracy vs known labels: {np.mean(aligned_accuracies):.3f} +/- 
 print(f"Adjusted Rand Index: {np.mean(aris):.3f} +/- {np.std(aris):.3f}")
 print(f"Normalized Mutual Information: {np.mean(nmis):.3f} +/- {np.std(nmis):.3f}")
 print(f"Silhouette score: {np.mean(silhouettes):.3f} +/- {np.std(silhouettes):.3f}")
+
+# ============================================================
+# SAVE CLUSTERING METRICS - previously print-only, so every rerun
+# silently overwrote the last one. Written alongside the feature
+# selection output rather than into it, since this is a summary
+# table, not a per-seed file like PCALoadings/SilhouettePermImportance.
+# ============================================================
+performance_dir = "../performance"
+os.makedirs(performance_dir, exist_ok=True)
+
+with open(os.path.join(performance_dir, "KMeans_pca_summary.txt"), "w") as f:
+    f.write(f"PCA components: {X_pca.shape[1]}\n")
+    f.write(f"Variance explained: {pca.explained_variance_ratio_.sum()*100:.2f}%\n")
+
+kmeans_performance = pd.DataFrame({
+    "Metric": ["Aligned_Accuracy", "Adjusted_Rand_Index", "Normalized_Mutual_Info", "Silhouette_Score"],
+    "Mean": [np.mean(aligned_accuracies), np.mean(aris), np.mean(nmis), np.mean(silhouettes)],
+    "Std": [np.std(aligned_accuracies), np.std(aris), np.std(nmis), np.std(silhouettes)],
+})
+kmeans_performance.to_csv(os.path.join(performance_dir, "KMeans_performance.csv"), index=False)
+print(f"Saved clustering metrics to {performance_dir}/KMeans_performance.csv")
 
 
 # ============================================================

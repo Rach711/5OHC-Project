@@ -103,6 +103,27 @@ print(f"XGBoost Precision: {np.mean(xgb_precisions):.3f} +/- {np.std(xgb_precisi
 print(f"XGBoost f1: {np.mean(xgb_f1s):.3f} +/- {np.std(xgb_f1s):.3f}")
 print(f"XGBoost Recall: {np.mean(xgb_recalls):.3f} +/- {np.std(xgb_recalls):.3f}")
 
+# ============================================================
+# SAVE PERFORMANCE METRICS - previously print-only, so every rerun
+# silently overwrote the last one. Written alongside the feature
+# selection output rather than into it, since this is a summary
+# table, not a per-seed file like XGBImportance/RFECV/PermImportance.
+# ============================================================
+performance_dir = "../performance"
+os.makedirs(performance_dir, exist_ok=True)
+
+with open(os.path.join(performance_dir, "XGB_best_params.txt"), "w") as f:
+    f.write(f"Best params: {best_xgb_params}\n")
+    f.write(f"Best CV accuracy: {xgb_grid_search.best_score_:.6f}\n")
+
+xgb_performance = pd.DataFrame({
+    "Metric": ["Accuracy", "Precision", "F1", "Recall"],
+    "Mean": [np.mean(xgb_accuracies), np.mean(xgb_precisions), np.mean(xgb_f1s), np.mean(xgb_recalls)],
+    "Std": [np.std(xgb_accuracies), np.std(xgb_precisions), np.std(xgb_f1s), np.std(xgb_recalls)],
+})
+xgb_performance.to_csv(os.path.join(performance_dir, "XGB_performance.csv"), index=False)
+print(f"Saved performance metrics to {performance_dir}/XGB_performance.csv")
+
 
 # ============================================================
 # FEATURE SELECTION #2 - XGBoost Feature Importance (gain-based)
