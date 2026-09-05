@@ -55,7 +55,13 @@ TIMESERIES_METRICS = {
     # rmsf is handled separately below - it's per-residue, not a time series
 }
 
-TIME_UNIT_DIVISOR = 1000   # ps -> ns; set to 1 to keep ps as-is
+TIME_UNIT_DIVISOR = {"rmsd": 1, "rg": 1000, "sasa": 1000}
+# ^ metric-specific, NOT a single shared constant. 10-analysis.sh runs
+# `gmx rms` with -tu ns, so RMSD's raw .xvg time column is already in ns
+# (divisor 1 = no further conversion needed). `gmx gyrate` and `gmx sasa`
+# get no -tu flag, so GROMACS defaults those to ps (divisor 1000 to get ns).
+# Using one uniform divisor for every metric silently re-divided RMSD's
+# already-in-ns values by another 1000, compressing a 300 ns axis to 0.3.
 EQUIL_FRACTION = 0.5       # fraction of trajectory (from the end) considered "equilibrated"
 
 sns.set_theme(style="whitegrid", context="talk")
@@ -112,7 +118,7 @@ def load_timeseries(seq_dir: Path) -> pd.DataFrame:
         if arr.size == 0:
             print(f"WARNING: no data parsed from {fp}")
             continue
-        time = arr[:, 0] / TIME_UNIT_DIVISOR
+        time = arr[:, 0] / TIME_UNIT_DIVISOR[metric]
         value = arr[:, 1]     # first data column after time; change index
                                # if your xvg has the quantity you want in a
                                # different column (e.g. gmx gyrate writes
@@ -150,7 +156,7 @@ def plot_timeseries(df: pd.DataFrame, metric: str, component: str, seq: str, inf
 
     pivot = sub.pivot_table(index="time", columns="replicate", values="value").sort_index()
 
-    ax.set_xlabel("Time (ns)" if TIME_UNIT_DIVISOR == 1000 else "Time (ps)")
+    ax.set_xlabel("Time (ns)")  # every metric is now correctly in ns after the per-metric divisor above
     ax.set_ylabel(info["ylabel"])
     ax.set_title(f"{metric.upper()} ({component}) \u2014 {seq}")
     ax.legend(fontsize=9, title="Replicate")

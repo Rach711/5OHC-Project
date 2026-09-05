@@ -56,7 +56,13 @@ TIMESERIES_METRICS = {
     # rmsf handled separately - it's per-residue, not a time series
 }
 
-TIME_UNIT_DIVISOR = 1000   # ps -> ns; set to 1 to keep ps as-is
+TIME_UNIT_DIVISOR = {"rmsd": 1, "rg": 1000, "sasa": 1000}
+# ^ metric-specific, NOT a single shared constant. 10-analysis.sh runs
+# `gmx rms` with -tu ns, so RMSD's raw .xvg time column is already in ns
+# (divisor 1 = no further conversion needed). `gmx gyrate` and `gmx sasa`
+# get no -tu flag, so GROMACS defaults those to ps (divisor 1000 to get ns).
+# Using one uniform divisor for every metric silently re-divided RMSD's
+# already-in-ns values by another 1000, compressing a 300 ns axis to 0.3.
 EQUIL_FRACTION = 0.5       # fraction of trajectory (from the end) considered "equilibrated"
 
 GROUP_ORDER = ["hotspot", "non-hotspot"]
@@ -64,23 +70,56 @@ GROUP_COLOURS = {"hotspot": "#d62728", "non-hotspot": "#1f77b4"}  # red / blue
 
 STAT_TEST = "paired"       # "paired" (scipy ttest_rel) or "unpaired" (scipy ttest_ind)
 
+# ============================================================
+# Collects one row per metric/component group comparison below, so the
+# paired t-test statistics - previously visible only as a text annotation
+# burned into each figure's title - survive as an actual table instead of
+# needing to be read off 9 separate plots.
+# ============================================================
+group_comparison_results = []
+
 sns.set_theme(style="whitegrid", context="talk")
 
 
 # ------------------------- CLASSIFICATION ------------------------------
 
+# Which hotspot site is paired with which non-hotspot site, taken directly
+# from the bioinformatic pairing (coding_CT_hotspot_nonhotspot_pairs_by_CDS_
+# mutation.csv). Needed because each side of a pair has its OWN gene+position
+# identifier - e.g. APC_637_hot pairs with APC_641_non, not APC_637_non - so
+# stripping the _hot/_non suffix alone can't recover a shared pair_id the
+# way it would if both sides used the same site number.
+PAIR_MAP = {
+    'APC_637': 'APC_637_641', 'APC_641': 'APC_637_641',
+    'APC_3340': 'APC_3340_3335', 'APC_3335': 'APC_3340_3335',
+    'APC_4099': 'APC_4099_4103', 'APC_4103': 'APC_4099_4103',
+    'APC_4348': 'APC_4348_4343', 'APC_4343': 'APC_4348_4343',
+    'TP53_637': 'TP53_637_632', 'TP53_632': 'TP53_637_632',
+    'TP53_844': 'TP53_844_849', 'TP53_849': 'TP53_844_849',
+}
+
+
 def classify_sequence(sequence: str):
     """
     Split a sequence folder name into (group, pair_id) from its _hot/_non
-    suffix. EDIT HERE if your naming convention changes.
-    Returns (None, None) for anything that doesn't match, so it can be
-    skipped and reported rather than silently misclassified.
+    suffix. pair_id comes from PAIR_MAP - the site's own gene+position name
+    mapped to a shared pair label - rather than the suffix-stripped name
+    itself, since the hotspot and non-hotspot sides are different CDS sites.
+    Returns (None, None) for anything that doesn't match (wrong suffix, or a
+    site not in PAIR_MAP), so it can be skipped and reported rather than
+    silently misclassified or silently left unpaired.
     """
     if sequence.endswith("_hot"):
-        return "hotspot", sequence[: -len("_hot")]
+        site, group = sequence[: -len("_hot")], "hotspot"
     elif sequence.endswith("_non"):
-        return "non-hotspot", sequence[: -len("_non")]
-    return None, None
+        site, group = sequence[: -len("_non")], "non-hotspot"
+    else:
+        return None, None
+
+    pair_id = PAIR_MAP.get(site)
+    if pair_id is None:
+        return None, None
+    return group, pair_id
 
 
 # ------------------------- FILE DISCOVERY ------------------------------
@@ -126,7 +165,7 @@ def load_timeseries() -> pd.DataFrame:
         if arr.size == 0:
             print(f"WARNING: no data parsed from {fp}")
             continue
-        time = arr[:, 0] / TIME_UNIT_DIVISOR
+        time = arr[:, 0] / TIME_UNIT_DIVISOR[metric]
         value = arr[:, 1]     # first data column after time; adjust index
                                # if you need a different column
         records.extend(zip(
@@ -185,7 +224,7 @@ def plot_group_timeseries(df: pd.DataFrame, metric: str, component: str, info: d
         ax.plot(mean.index, mean.values, color=colour, lw=2.5, label=f"{group} (n={pivot.shape[1]} seq)")
         ax.fill_between(mean.index, mean - std, mean + std, color=colour, alpha=0.15)
 
-    ax.set_xlabel("Time (ns)" if TIME_UNIT_DIVISOR == 1000 else "Time (ps)")
+    ax.set_xlabel("Time (ns)")  # every metric is now correctly in ns after the per-metric divisor above
     ax.set_ylabel(info["ylabel"])
     ax.set_title(f"{metric.upper()} ({component}) \u2014 hotspot vs non-hotspot\n"
                  f"(band = std across the 6 sequences per group)")
@@ -219,6 +258,15 @@ def plot_group_rmsf(rmsf_df: pd.DataFrame, component: str):
     ax.set_ylabel("RMSF (nm)")
     ax.set_title(f"RMSF ({component}) \u2014 hotspot vs non-hotspot")
     ax.legend(fontsize=10)
+
+    if component == "dna":
+        LESION_RESIDUE = 8
+        ax.axvline(LESION_RESIDUE, color="black", linestyle="--", lw=1.5, alpha=0.8, zorder=5)
+        ax.annotate("lesion", xy=(LESION_RESIDUE, ax.get_ylim()[1] * 0.98),
+            xytext=(7, 0), textcoords="offset points",
+            color="black", fontsize=12, ha="left", va="top",
+            bbox=dict(facecolor="white", edgecolor="none", alpha=0.75, pad=1))
+
     fig.tight_layout()
     fig.savefig(OUT_DIR / f"rmsf_{component}_group_perresidue.png", dpi=300)
     fig.savefig(OUT_DIR / f"rmsf_{component}_group_perresidue.pdf")
@@ -268,15 +316,28 @@ def plot_group_comparison(seq_avg_df: pd.DataFrame, metric: str, component: str,
 
     if len(common_pairs) < 2:
         print(f"WARNING: fewer than 2 matched pairs for {metric} ({component}) - skipping stats")
-        p_val = np.nan
+        t_stat, p_val = np.nan, np.nan
     else:
         hot_vals = hot.loc[common_pairs].values
         non_vals = non.loc[common_pairs].values
-        _, p_val = run_stat_test(hot_vals, non_vals)
+        t_stat, p_val = run_stat_test(hot_vals, non_vals)
 
     means = sub.groupby("group").value.mean().reindex(GROUP_ORDER)
     sems = sub.groupby("group").value.sem().reindex(GROUP_ORDER)
     x_pos = np.arange(len(GROUP_ORDER))
+
+    group_comparison_results.append({
+        "metric": metric,
+        "component": component,
+        "n_pairs": len(common_pairs),
+        "mean_hotspot": means.get("hotspot", np.nan),
+        "mean_nonhotspot": means.get("non-hotspot", np.nan),
+        "sem_hotspot": sems.get("hotspot", np.nan),
+        "sem_nonhotspot": sems.get("non-hotspot", np.nan),
+        "test_statistic": t_stat,
+        "p_value": p_val,
+        "test_type": STAT_TEST,
+    })
 
     fig, ax = plt.subplots(figsize=(8, 6.5))
     ax.bar(x_pos, means.values, yerr=sems.values, capsize=6,
@@ -360,5 +421,16 @@ if __name__ == "__main__":
     for component in sorted(rmsf_avg.component.unique()):
         print(f"Plotting RMSF ({component}) group comparison...")
         plot_group_comparison(seq_avg_df, "rmsf", component, "RMSF (nm)")
+
+    # ============================================================
+    # SAVE GROUP COMPARISON STATS - previously only visible as text
+    # annotations burned into each figure, so every rerun could only be
+    # read back by opening 9 separate plots. Written next to the figures
+    # they summarise, one row per metric/component comparison.
+    # ============================================================
+    stats_df = pd.DataFrame(group_comparison_results)
+    stats_csv_path = OUT_DIR / "dynamics_group_comparison_stats.csv"
+    stats_df.to_csv(stats_csv_path, index=False)
+    print(f"Saved {len(stats_df)} group comparison rows to {stats_csv_path}")
 
     print(f"\nDone. Figures saved to: {OUT_DIR.resolve()}")

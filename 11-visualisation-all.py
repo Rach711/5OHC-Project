@@ -54,7 +54,13 @@ TIMESERIES_METRICS = {
     # rmsf is handled separately below - it's per-residue, not a time series
 }
 
-TIME_UNIT_DIVISOR = 1000   # ps -> ns; set to 1 to keep ps as-is
+TIME_UNIT_DIVISOR = {"rmsd": 1, "rg": 1000, "sasa": 1000}
+# ^ metric-specific, NOT a single shared constant. 10-analysis.sh runs
+# `gmx rms` with -tu ns, so RMSD's raw .xvg time column is already in ns
+# (divisor 1 = no further conversion needed). `gmx gyrate` and `gmx sasa`
+# get no -tu flag, so GROMACS defaults those to ps (divisor 1000 to get ns).
+# Using one uniform divisor for every metric silently re-divided RMSD's
+# already-in-ns values by another 1000, compressing a 300 ns axis to 0.3.
 
 # fraction of the trajectory (from the end) considered "equilibrated" -
 # used only for the summary box/violin plots
@@ -106,7 +112,7 @@ def load_timeseries() -> pd.DataFrame:
         if arr.size == 0:
             print(f"WARNING: no data parsed from {fp}")
             continue
-        time = arr[:, 0] / TIME_UNIT_DIVISOR
+        time = arr[:, 0] / TIME_UNIT_DIVISOR[metric]
         value = arr[:, 1]     # first data column after time; change index
                                # if your xvg has the quantity you want in a
                                # different column (e.g. gmx gyrate writes
@@ -155,7 +161,7 @@ def plot_timeseries(df: pd.DataFrame, metric: str, component: str, info: dict):
         ax.plot(mean.index, mean.values, color=colour, lw=2, label=seq)
         ax.fill_between(mean.index, mean - std, mean + std, color=colour, alpha=0.15)
 
-    ax.set_xlabel("Time (ns)" if TIME_UNIT_DIVISOR == 1000 else "Time (ps)")
+    ax.set_xlabel("Time (ns)")  # every metric is now correctly in ns after the per-metric divisor above
     ax.set_ylabel(info["ylabel"])
     ax.set_title(f"{metric.upper()} ({component}) \u2014 mean \u00b1 std across replicates")
     ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=9, title="Sequence")
@@ -182,6 +188,15 @@ def plot_rmsf(rmsf_df: pd.DataFrame, component: str):
     ax.set_ylabel("RMSF (nm)")
     ax.set_title(f"RMSF ({component}) \u2014 mean \u00b1 std across replicates")
     ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=9, title="Sequence")
+    
+    if component == "dna":
+        LESION_RESIDUE = 8
+        ax.axvline(LESION_RESIDUE, color="black", linestyle="--", lw=1.5, alpha=0.8, zorder=5)
+        ax.annotate("lesion", xy=(LESION_RESIDUE, ax.get_ylim()[1] * 0.98),
+            xytext=(5, 0), textcoords="offset points",
+            color="black", fontsize=12, ha="left", va="top",
+            bbox=dict(facecolor="white", edgecolor="none", alpha=0.75, pad=1))
+    
     fig.tight_layout()
     fig.savefig(OUT_DIR / f"rmsf_{component}_perresidue.png", dpi=300)
     fig.savefig(OUT_DIR / f"rmsf_{component}_perresidue.pdf")
